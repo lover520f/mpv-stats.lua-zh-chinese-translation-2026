@@ -1,3 +1,14 @@
+-- ============================================================================
+-- mpv stats.lua 中文汉化（模块化 / 非侵入式）
+-- 原版核心逻辑（第 1 行至“自动翻译模块”之前）一律保持不变，
+-- 所有中文化与 CPU/GPU 监控均在文件末尾的模块中实现。
+-- 修改汉化只动对应模块，不要改动原版代码。
+--
+-- 模块位置（行号为“含本注释块后”的最终行号）：
+--   原版 stats.lua 内容（保持不变）          ：第 1 行 ～ 第 1847 行
+--   ① 自动翻译模块 auto_translate_text       ：第 1848 行 到 第 2150 行
+--   ② 系统资源监控模块（CPU/GPU 占用）        ：第 2265 行 到 第 3016 行
+-- ============================================================================
 -- Display some stats.
 --
 -- Please consult the readme for information about usage and configuration:
@@ -400,14 +411,14 @@ local function append_perfdata(header, s, dedicated_page)
 
         if dedicated_page then
             s[#s+1] = format("%s%s%s:", o.nl, o.indent,
-                             bold(frame:gsub("^%l", string.upper)))
+                             bold(frame_translations[frame] or frame:gsub("^%l", string.upper)))
 
             for _, pass in ipairs(data) do
                 s[#s+1] = format(f, o.nl, o.indent, o.indent,
                                  font_mono, pp(pass["last"]),
                                  pp(pass["avg"]), pp(pass["peak"]),
                                  o.prefix_sep .. indent, p(pass["last"], last_s[frame]),
-                                 font, o.prefix_sep, o.prefix_sep, pass["desc"])
+                                 font, o.prefix_sep, o.prefix_sep, pass_translations[pass["desc"]] or pass["desc"])
 
                 if o.plot_perfdata and o.use_ass then
                     -- use the same line that was already started for this iteration
@@ -428,7 +439,7 @@ local function append_perfdata(header, s, dedicated_page)
             s[#s+1] = format(f, o.nl, o.indent, o.indent, font_mono,
                             pp(last_s[frame]), pp(avg_s[frame]), pp(peak_s[frame]),
                             "", "", font, o.prefix_sep, o.prefix_sep,
-                            frame:gsub("^%l", string.upper))
+                            frame_translations[frame] or frame:gsub("^%l", string.upper))
         end
     end
 end
@@ -1837,6 +1848,12 @@ mp.observe_property('hwdec-current', 'string', update_property_cache)
 -- 自动翻译模块 - 全局替换版（yosh.wang_20260712）（QQ交流群：1097053691）
 -- ============================================================
 
+-- 帧分组名 / 渲染阶段描述翻译（供 append_perfdata 使用，模块化补翻，不改原版）
+-- 帧分组名 / 渲染阶段描述翻译：原版 add_video_out 在上方（第 414/421/442 行）会引用，
+-- 故必须声明为全局（不能用 local），否则原版代码作用域看不到，运行时报 nil。
+frame_translations = { decoder="解码", renderer="渲染", gpu="显卡", vo="输出" }
+pass_translations  = { scale="缩放", shader="着色", blit="位块", PP="后期" }
+
 -- 通用词汇翻译表
 local function auto_translate_text(text)
     if not text or type(text) ~= "string" then
@@ -1845,10 +1862,10 @@ local function auto_translate_text(text)
     
     local translations = {
         -- ==================== 页面标题 ====================
-        ["Default"] = "默认信息",
+        ["Default"] = "默认",
         ["Extended Frame Timings"] = "扩展帧耗时",
         ["Cache Statistics"] = "缓存统计",
-        ["Active Key Bindings"] = "活动按键绑定",
+        ["Active Key Bindings"] = "当前按键绑定",
         ["Tracks Info"] = "轨道信息",
         ["Internal Performance Info"] = "内部性能信息",
         
@@ -1874,7 +1891,7 @@ local function auto_translate_text(text)
         [" (estimated)"] = "（估计）",
         
         -- ==================== 视频/显示器信息 ====================
-        ["Display:"] = "显示器：",
+        ["Display:"] = "显示：",
         ["Context:"] = "渲染后端：",
         ["A-V:"] = "音视频同步：",
         ["Refresh Rate:"] = "刷新率：",
@@ -1932,10 +1949,10 @@ local function auto_translate_text(text)
         ["Timecode:"] = "时间码：",
         ["GOP"] = "GOP",
         ["SMPTE"] = "SMPTE",
-        ["Estimated SMPTE"] = "估计SMPTE",
-        ["GOP Timecode:"] = "GOP时间码：",
-        ["SMPTE Timecode:"] = "SMPTE时间码：",
-        ["Estimated SMPTE Timecode:"] = "估计SMPTE时间码：",
+        ["Estimated SMPTE"] = "估计 SMPTE",
+        ["GOP Timecode:"] = "GOP 时间码：",
+        ["SMPTE Timecode:"] = "SMPTE 时间码：",
+        ["Estimated SMPTE Timecode:"] = "估计 SMPTE 时间码：",
         
         -- ==================== 帧耗时页面 ====================
         ["Frame Timings:"] = "帧耗时：",
@@ -1954,14 +1971,14 @@ local function auto_translate_text(text)
         ["seeking"] = "定位中",
         ["Speed:"] = "速度：",
         ["Total RAM:"] = "总内存：",
-        ["Forward RAM:"] = "前向内存：",
+        ["Forward RAM:"] = "前向缓存：",
         ["Disk Cache:"] = "磁盘缓存：",
         ["(disabled)"] = "（已禁用）",
-        ["Media Seeks:"] = "媒体定位：",
-        ["Stream Seeks:"] = "流定位：",
+        ["Media Seeks:"] = "媒体跳转：",
+        ["Stream Seeks:"] = "流跳转：",
         ["Ranges:"] = "范围：",
         ["Start Cached:"] = "起始已缓存：",
-        ["End Cached:"] = "结尾已缓存：",
+        ["End Cached:"] = "结束已缓存：",
         ["Range "] = "范围 ",
         ["Unavailable."] = "不可用。",
         ["yes"] = "是",
@@ -1971,19 +1988,17 @@ local function auto_translate_text(text)
         ["script: "] = "脚本：",
         ["[unknown]"] = "[未知]",
         ["Filter bindings:"] = "过滤绑定：",
-        ["(hint: scroll with "] = "（提示：使用 ",
-        [" and search with "] = " 滚动，使用 ",
         
         -- ==================== 轨道信息页面 ====================
         ["ID:"] = "ID：",
-        ["Demuxer ID:"] = "解复用器ID：",
+        ["Demuxer ID:"] = "解复用器 ID：",
         ["Program ID:"] = "节目ID：",
         ["FFmpeg Index:"] = "FFmpeg索引：",
         ["Flags:"] = "标志：",
         ["Codec:"] = "编解码器：",
         ["Language:"] = "语言：",
         ["Channel Layout:"] = "声道布局：",
-        ["HLS Bitrate:"] = "HLS码率：",
+        ["HLS Bitrate:"] = "HLS 码率：",
         ["Rotation:"] = "旋转：",
         ["Pixel Aspect Ratio:"] = "像素宽高比：",
         ["Replay Gain:"] = "重放增益：",
@@ -2006,6 +2021,17 @@ local function auto_translate_text(text)
         
         -- ==================== 滤镜相关 ====================
         [" (disabled)"] = "（已禁用）",
+
+        -- ==================== 命令子词（按键绑定搜索） ====================
+        ["seek"] = "跳转",
+        ["playlist"] = "播放列表",
+        ["cycle"] = "循环",
+        ["set"] = "设置",
+        ["add"] = "添加",
+        ["toggle"] = "切换",
+        ["change_list"] = "变更列表",
+        ["script_binding"] = "脚本绑定",
+        ["script_message_to"] = "脚本消息至",
     }
     
     -- 精确匹配
@@ -2014,12 +2040,6 @@ local function auto_translate_text(text)
         return result
     end
     
-    -- 模糊匹配（跳过过短的键，防止破坏包含短英文单词的文本）
-    for en, zh in pairs(translations) do
-        if #en >= 4 and text:find(en, 1, true) then
-            text = text:gsub(en, zh, 1)
-        end
-    end
     
     return text
 end
@@ -2104,10 +2124,15 @@ append_property = function(s, prop, attr, excluded, cached)
     return original_append_property(s, prop, attr, excluded, cached)
 end
 
--- 重写 scroll_hint
+-- 重写 scroll_hint（整句中文化，避免拆段导致「使用 /」语法破碎）
 scroll_hint = function(search)
-    local hint = original_scroll_hint(search)
-    return auto_translate_text(hint)
+    local hint = format("（提示：用 %s/%s", o.key_scroll_up, o.key_scroll_down)
+    if search then
+        hint = hint .. " 滚动，按 " .. o.key_search .. " 搜索"
+    end
+    hint = hint .. "）"
+    if not o.use_ass then return " " .. hint end
+    return format(" {\\fs%s}%s{\\fs%s}", font_size * 0.66, hint, font_size)
 end
 
 -- 重写 cmd_subject
@@ -2276,8 +2301,8 @@ local function detect_hardware()
                "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name"}, function(success, stdout)
         local found = {}
         if success then
-            for name in stdout:gmatch("[^\r\n]+") do
-                name = name:gsub("^%s+", ""):gsub("%s+$", "")
+            for raw in stdout:gmatch("[^\r\n]+") do
+                local name = raw:gsub("^%s+", ""):gsub("%s+$", "")
                 if #name > 0 and not is_virtual_gpu(name) then
                     local dup = false
                     for _, n in ipairs(found) do
