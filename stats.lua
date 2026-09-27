@@ -1,5 +1,19 @@
 -- ============================================================================
 -- mpv stats.lua 中文汉化（模块化 / 非侵入式）
+-- 作者：yosh.wang    更新：20260927
+--
+-- 🔗 项目仓库：https://github.com/yosh-wang/mpv-stats.lua-zh-chinese-translation-
+-- 🔗 MPV中文社区：https://github.com/yosh-wang/MPV-QQ-Discussion-Group
+-- 🔗 mpv资源导航：https://github.com/yosh-wang/MPV-Resource-Index
+--
+-- 📌 QQ ①群：1097053691【2000人群已满】
+-- 📌 QQ ②群：1104144778
+-- 🔗 ①群入群链接：https://qm.qq.com/q/CnzyTeDAoo
+-- 🔗 ②群入群链接：https://qm.qq.com/q/KDxk01ukwe
+-- 🔗 进群暗号：mpv 玩家
+--
+-- ============================================================================
+-- mpv stats.lua 中文汉化（模块化 / 非侵入式）
 -- 原版核心逻辑（第 1 行至“自动翻译模块”之前）一律保持不变，
 -- 所有中文化与 CPU/GPU 监控均在文件末尾的模块中实现。
 -- 修改汉化只动对应模块，不要改动原版代码。
