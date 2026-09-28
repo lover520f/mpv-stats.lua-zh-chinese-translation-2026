@@ -2180,6 +2180,9 @@ local function run_async(cmd_args, callback)
     end)
 end
 
+-- 显示起始时刻（oneshot 模式下计算剩余显示时长，避免采集刷新拉长显示时间）
+local display_started_at = 0
+
 -- 强制刷新页面
 local function refresh_display()
     if display_timer and display_timer:is_enabled() and curr_page then
@@ -2187,8 +2190,16 @@ local function refresh_display()
         if o.persistent_overlay then
             mp.set_osd_ass(0, 0, ass_content)
         else
-            mp.osd_message((o.use_ass and ass_start or "") .. ass_content,
-                           display_timer.oneshot and o.duration or o.redraw_delay + 1)
+            local dur
+            if display_timer.oneshot then
+                -- 只重绘剩余时长：采集完成后的刷新不得重置整个显示周期
+                -- （display_timer.timeout 即 oneshot 的 o.duration；下限钳 1s 防 OSD 闪没）
+                local remain = (display_timer.timeout or o.duration) - (mp.get_time() - display_started_at)
+                dur = (remain > 1) and remain or 1
+            else
+                dur = o.redraw_delay + 1
+            end
+            mp.osd_message((o.use_ass and ass_start or "") .. ass_content, dur)
         end
     end
 end
@@ -2742,34 +2753,62 @@ local function apply_gpu_usage_map(gpu_map, fmt)
     return updated
 end
 
+-- 运行时记忆本机可用的采集方案（每台机器各自学习，失败自动退回完整链）
+local cpu_ok_method = nil   -- nil / "cim" / "typeperf" / "powershell"
+local gpu_ok_method = nil   -- nil / "cim" / "typeperf" / "powershell"（nvidia-smi 之外的回退方案）
+
 -- 获取 CPU 占用率
 local function update_cpu()
     local os_name = mp.get_property("platform", "unknown")
 
     if os_name == "windows" then
-        -- 优先级：CIM → typeperf → powershell
-        update_cpu_cim(function(load)
-            if load then
-                cpu_usage = load .. "%"
+        -- 方案链：CIM → typeperf → powershell（成功者写入 cpu_ok_method，
+        -- 下轮直接从它开始；它若失败则清空并退回完整链，最坏情况与原逻辑一致）
+        local chain_cim, chain_typeperf, chain_powershell
+        chain_powershell = function()
+            update_cpu_powershell(function(load3)
+                if load3 then
+                    cpu_ok_method = "powershell"
+                    cpu_usage = string.format("%.0f%%", tonumber(load3))
+                else
+                    cpu_usage = "N/A"
+                end
                 refresh_display()
-            else
-                update_cpu_typeperf(function(load2)
-                    if load2 then
-                        cpu_usage = string.format("%.0f%%", tonumber(load2))
-                        refresh_display()
-                    else
-                        update_cpu_powershell(function(load3)
-                            if load3 then
-                                cpu_usage = string.format("%.0f%%", tonumber(load3))
-                            else
-                                cpu_usage = "N/A"
-                            end
-                            refresh_display()
-                        end)
-                    end
-                end)
-            end
-        end)
+            end)
+        end
+        chain_typeperf = function()
+            update_cpu_typeperf(function(load2)
+                if load2 then
+                    cpu_ok_method = "typeperf"
+                    cpu_usage = string.format("%.0f%%", tonumber(load2))
+                    refresh_display()
+                else
+                    chain_powershell()
+                end
+            end)
+        end
+        chain_cim = function()
+            update_cpu_cim(function(load)
+                if load then
+                    cpu_ok_method = "cim"
+                    cpu_usage = load .. "%"
+                    refresh_display()
+                else
+                    if cpu_ok_method == "cim" then cpu_ok_method = nil end
+                    chain_typeperf()
+                end
+            end)
+        end
+
+        if cpu_ok_method == "cim" then
+            chain_cim()
+        elseif cpu_ok_method == "typeperf" then
+            chain_typeperf()
+        elseif cpu_ok_method == "powershell" then
+            chain_powershell()
+        else
+            chain_cim()
+        end
     elseif os_name == "linux" then
         run_async({"sh", "-c", "top -bn1 | grep 'Cpu(s)' | awk '{print $2}'"}, function(success, stdout)
             if success then
@@ -2806,45 +2845,70 @@ local function update_cpu()
 end
 
 -- 获取 GPU 占用率（CIM → typeperf → powershell 完整回退链）
+-- 成功方案写入 gpu_ok_method，下轮直接从它开始；失败自动退回完整链（见上方说明）
 local function update_gpu_full_fallback()
-    update_gpu_cim(function(result)
-        if result and type(result) == "table" then
-            apply_gpu_usage_map(result, "%.0f%%")
-            refresh_display()
-        else
-            update_gpu_typeperf(function(result2)
-                if result2 and type(result2) == "table" then
-                    apply_gpu_usage_map(result2, "%.0f%%")
-                    refresh_display()
-                else
-                    update_gpu_powershell(function(load4)
-                        if load4 then
-                            -- 单值兜底：只给还没有有效数据的 GPU 设置值，不覆盖已有数据
-                            for _, gname in ipairs(gpu_names) do
-                                if not gpu_usages[gname] or gpu_usages[gname] == "N/A" then
-                                    gpu_usages[gname] = string.format("%.0f%%", tonumber(load4))
-                                end
-                            end
-                            if #gpu_names == 0 then
-                                gpu_usages["__total__"] = string.format("%.0f%%", tonumber(load4))
-                            end
-                        else
-                            -- 失败时也只清空那些本来就是 N/A 的，不覆盖已有数据
-                            for _, gname in ipairs(gpu_names) do
-                                if not gpu_usages[gname] or gpu_usages[gname] == "N/A" then
-                                    gpu_usages[gname] = "N/A"
-                                end
-                            end
-                            if #gpu_names == 0 then
-                                gpu_usages["__total__"] = "N/A"
-                            end
-                        end
-                        refresh_display()
-                    end)
+    local chain_cim, chain_typeperf, chain_powershell
+    chain_powershell = function()
+        update_gpu_powershell(function(load4)
+            if load4 then
+                gpu_ok_method = "powershell"
+                -- 单值兜底：只给还没有有效数据的 GPU 设置值，不覆盖已有数据
+                for _, gname in ipairs(gpu_names) do
+                    if not gpu_usages[gname] or gpu_usages[gname] == "N/A" then
+                        gpu_usages[gname] = string.format("%.0f%%", tonumber(load4))
+                    end
                 end
-            end)
-        end
-    end)
+                if #gpu_names == 0 then
+                    gpu_usages["__total__"] = string.format("%.0f%%", tonumber(load4))
+                end
+            else
+                -- 失败时也只清空那些本来就是 N/A 的，不覆盖已有数据
+                for _, gname in ipairs(gpu_names) do
+                    if not gpu_usages[gname] or gpu_usages[gname] == "N/A" then
+                        gpu_usages[gname] = "N/A"
+                    end
+                end
+                if #gpu_names == 0 then
+                    gpu_usages["__total__"] = "N/A"
+                end
+            end
+            refresh_display()
+        end)
+    end
+    chain_typeperf = function()
+        update_gpu_typeperf(function(result2)
+            if result2 and type(result2) == "table" then
+                gpu_ok_method = "typeperf"
+                apply_gpu_usage_map(result2, "%.0f%%")
+                refresh_display()
+            else
+                if gpu_ok_method == "typeperf" then gpu_ok_method = nil end
+                chain_powershell()
+            end
+        end)
+    end
+    chain_cim = function()
+        update_gpu_cim(function(result)
+            if result and type(result) == "table" then
+                gpu_ok_method = "cim"
+                apply_gpu_usage_map(result, "%.0f%%")
+                refresh_display()
+            else
+                if gpu_ok_method == "cim" then gpu_ok_method = nil end
+                chain_typeperf()
+            end
+        end)
+    end
+
+    if gpu_ok_method == "cim" then
+        chain_cim()
+    elseif gpu_ok_method == "typeperf" then
+        chain_typeperf()
+    elseif gpu_ok_method == "powershell" then
+        chain_powershell()
+    else
+        chain_cim()
+    end
 end
 
 -- 获取 GPU 占用率
@@ -2992,6 +3056,11 @@ local original_process_key_binding = process_key_binding
 process_key_binding = function(oneshot)
     original_process_key_binding(oneshot)
 
+    -- oneshot 首次显示/重按重计时：记录显示起点，供 refresh_display 计算剩余时长
+    if display_timer and display_timer:is_enabled() and display_timer.oneshot then
+        display_started_at = mp.get_time()
+    end
+
     if display_timer and display_timer:is_enabled() then
         if not stats_refresh_timer then
             stats_refresh_timer = mp.add_periodic_timer(0.5, refresh_stats)
@@ -3028,6 +3097,9 @@ end)
 
 -- ============================================================
 -- 系统统计模块结束
+-- ============================================================
+
+
 -- ============================================================
 
 
