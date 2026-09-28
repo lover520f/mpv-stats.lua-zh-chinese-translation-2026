@@ -1,6 +1,6 @@
 -- ============================================================================
 -- mpv stats.lua 中文汉化（模块化 / 非侵入式）
--- 作者：yosh.wang    更新：20260927
+-- 作者：yosh.wang    更新：20260928
 --
 -- 🔗 项目仓库：https://github.com/yosh-wang/mpv-stats.lua-zh-chinese-translation-
 -- 🔗 MPV中文社区：https://github.com/yosh-wang/MPV-QQ-Discussion-Group
@@ -13,16 +13,17 @@
 -- 🔗 进群暗号：mpv 玩家
 --
 -- ============================================================================
+-- ============================================================
 -- mpv stats.lua 中文汉化（模块化 / 非侵入式）
--- 原版核心逻辑（第 1 行至“自动翻译模块”之前）一律保持不变，
--- 所有中文化与 CPU/GPU 监控均在文件末尾的模块中实现。
--- 修改汉化只动对应模块，不要改动原版代码。
---
--- 模块位置（行号为“含本注释块后”的最终行号）：
---   原版 stats.lua 内容（保持不变）          ：第 1 行 ～ 第 1847 行
---   ① 自动翻译模块 auto_translate_text       ：第 1848 行 到 第 2150 行
---   ② 系统资源监控模块（CPU/GPU 占用）        ：第 2265 行 到 第 3016 行
--- ============================================================================
+-- 原版核心逻辑（下方“原版 stats.lua 内容”段）逐字节保持不变；
+-- 所有中文化与 CPU/GPU 监控均在文件末尾模块中实现（铁律）。
+-- 修改汉化只动末尾模块，绝不改动原版代码任何一行。
+-- ============================================================
+-- 模块位置：
+--   原版 stats.lua 内容（逐字节不变）        ：第 27 行 起
+--   ① 自动翻译模块 + ② 系统资源监控模块      ：第 1852 行 起（到文件末尾）
+--   最终渲染出口翻译（显示出口包装）          ：模块最末尾
+-- ============================================================
 -- Display some stats.
 --
 -- Please consult the readme for information about usage and configuration:
@@ -30,11 +31,6 @@
 --
 -- Please note: not every property is always available and therefore not always
 -- visible.
-
-
--- ============================================================
--- 以下是原版文件内容（保持不变）
--- ============================================================
 
 local mp = require 'mp'
 local utils = require 'mp.utils'
@@ -425,14 +421,14 @@ local function append_perfdata(header, s, dedicated_page)
 
         if dedicated_page then
             s[#s+1] = format("%s%s%s:", o.nl, o.indent,
-                             bold(frame_translations[frame] or frame:gsub("^%l", string.upper)))
+                             bold(frame:gsub("^%l", string.upper)))
 
             for _, pass in ipairs(data) do
                 s[#s+1] = format(f, o.nl, o.indent, o.indent,
                                  font_mono, pp(pass["last"]),
                                  pp(pass["avg"]), pp(pass["peak"]),
                                  o.prefix_sep .. indent, p(pass["last"], last_s[frame]),
-                                 font, o.prefix_sep, o.prefix_sep, pass_translations[pass["desc"]] or pass["desc"])
+                                 font, o.prefix_sep, o.prefix_sep, pass["desc"])
 
                 if o.plot_perfdata and o.use_ass then
                     -- use the same line that was already started for this iteration
@@ -453,7 +449,7 @@ local function append_perfdata(header, s, dedicated_page)
             s[#s+1] = format(f, o.nl, o.indent, o.indent, font_mono,
                             pp(last_s[frame]), pp(avg_s[frame]), pp(peak_s[frame]),
                             "", "", font, o.prefix_sep, o.prefix_sep,
-                            frame_translations[frame] or frame:gsub("^%l", string.upper))
+                            frame:gsub("^%l", string.upper))
         end
     end
 end
@@ -933,7 +929,7 @@ local function append_img_params(s, r, ro)
                                 r["prim-blue-x"] or 0, r["prim-blue-y"] or 0,
                                 r["prim-white-x"] or 0, r["prim-white-y"] or 0),
             {prefix="Primaries:", nl="", indent=indent})
-        append(s, r["primaries"], {prefix="使用", nl="", indent=" ", prefix_sep=" ",
+        append(s, r["primaries"], {prefix="in", nl="", indent=" ", prefix_sep=" ",
                                    no_prefix_markup=true})
     else
         append(s, r["primaries"], {prefix="Primaries:", nl="", indent=indent})
@@ -1470,7 +1466,7 @@ local function cache_stats()
     for n, range in ipairs(ranges) do
         append(stats, mp.format_time(range["start"]) .. " - " ..
                       mp.format_time(range["end"]),
-               {prefix = "Range " .. n .. ":"})
+               {prefix = format("Range %s:", n)})
     end
 
     return finalize_page({}, stats, false)
@@ -1853,20 +1849,9 @@ end
 mp.observe_property('current-window-scale', 'native', update_property_cache)
 mp.observe_property('display-names', 'string', update_property_cache)
 mp.observe_property('hwdec-current', 'string', update_property_cache)
-
-
-
-
-
--- ============================================================
 -- 自动翻译模块 - 全局替换版（yosh.wang_20260712）（QQ交流群：1097053691）
 -- ============================================================
 
--- 帧分组名 / 渲染阶段描述翻译（供 append_perfdata 使用，模块化补翻，不改原版）
--- 帧分组名 / 渲染阶段描述翻译：原版 add_video_out 在上方（第 414/421/442 行）会引用，
--- 故必须声明为全局（不能用 local），否则原版代码作用域看不到，运行时报 nil。
-frame_translations = { decoder="解码", renderer="渲染", gpu="显卡", vo="输出" }
-pass_translations  = { scale="缩放", shader="着色", blit="位块", PP="后期" }
 
 -- 通用词汇翻译表
 local function auto_translate_text(text)
@@ -1969,9 +1954,6 @@ local function auto_translate_text(text)
         ["Estimated SMPTE Timecode:"] = "估计 SMPTE 时间码：",
         
         -- ==================== 帧耗时页面 ====================
-        ["Frame Timings:"] = "帧耗时：",
-        ["Total"] = "总计",
-        ["(last/average/peak μs)"] = "（最新/平均/峰值 微秒）",
         
         -- ==================== 缓存信息 ====================
         ["Cache Info:"] = "缓存信息：",
@@ -3035,7 +3017,114 @@ end)
 -- ============================================================
 
 
+-- ============================================================
 
 
+-- ============================================================
 
 
+-- ============================================================
+
+
+-- ============================================================
+
+
+-- ============================================================
+
+
+-- ============================================================
+
+
+-- ============================================================
+
+
+-- ============================================================
+
+
+-- ============================================================
+-- 最终渲染出口翻译（非侵入：原版一行不改）
+-- 背景：原版 append_perfdata 用 s[#s+1] = format(...) 直写 OSD 表，
+-- 不经 append，故帧分组名(VO/Decoder/GPU/Renderer)、渲染阶段
+-- (scale/shader/blit/PP)、标题 Frame Timings:、(last/average/peak μs)、
+-- Total 无法被 append 猴子补丁捕获，必须在最终显示出口统一翻译。
+--
+-- 关键约束（踩过的坑，勿改回）：
+--   1) Lua 字符串 pattern 不支持 | 选择分支，故每个标签必须单独枚举。
+--   2) \b / \h 不能写成 "\b"（那是退格符），必须用 [\\] 匹配字面反斜杠。
+--   3) ASS 模式下 o.nl="\N"、o.indent="\h\h\h\h\h"，监控行形如
+--      \N\h\h\h\h\hGPU: 37% —— 简化视图帧分组名必须用“后接 \N 或行尾”
+--      作边界，否则监控的 "GPU:" 会被误翻成 "显卡:"。
+--   4) 只替换文字，保留原版全部 ASS 字体/字号/粗体标记（字体一致）。
+-- ============================================================
+local function final_translate_ass(text)
+    if not text or type(text) ~= "string" then
+        return text
+    end
+
+    -- ① 帧耗时页标题（粗体）
+    text = text:gsub("(%{[\\]b1%})Frame Timings:(%{[\\]b0%})", "%1帧耗时：%2")
+    -- ② 副标题
+    text = text:gsub("%(last/average/peak μs%)", "（最新/平均/峰值 微秒）")
+
+    -- ③ 帧分组名（扩展帧耗时页，粗体包裹，唯一安全上下文）
+    --    注意：mpv 的 vo-passes 键为小写 decoder/gpu/renderer/vo，原版做首字母
+    --    大写后实际形如 Decoder/Gpu/Renderer/Vo，故用大小写无关的字符类匹配。
+    text = text:gsub("(%{[\\]b1%})[Vv][Oo](%{[\\]b0%})", "%1输出%2")
+    text = text:gsub("(%{[\\]b1%})[Dd]ecoder(%{[\\]b0%})", "%1解码%2")
+    text = text:gsub("(%{[\\]b1%})[Gg][Pp][Uu](%{[\\]b0%})", "%1显卡%2")
+    text = text:gsub("(%{[\\]b1%})[Rr]enderer(%{[\\]b0%})", "%1渲染%2")
+    --    mpv 0.41 起 vo-passes 分组改为 fresh / redraw（新帧 / 重绘）
+    text = text:gsub("(%{[\\]b1%})[Ff]resh(%{[\\]b0%})", "%1新帧%2")
+    text = text:gsub("(%{[\\]b1%})[Rr]edraw(%{[\\]b0%})", "%1重绘%2")
+
+    -- ③b 滤镜列表标签（vf / af 共用）
+    --     append_filters 用 s[#s+1] = ... bold(prefix) 直写 OSD 表，不经过 append，
+    --     故 append 猴子补丁抓不到，必须走最终出口翻译（原因同帧耗时页）。
+    text = text:gsub("(%{[\\]b1%})Filters:(%{[\\]b0%})", "%1滤镜：%2")
+
+    -- ④ 合计行 Total（粗体）
+    text = text:gsub("(%{[\\]b1%})Total(%{[\\]b0%})", "%1总计%2")
+
+    -- ⑤ 渲染阶段描述（旧版 mpv 的 scale/shader/blit/PP）
+    --    必须带“后接 \N 或行尾”边界：滤镜列表换行显示时滤镜名前同样有 \h，
+    --    若无边界会把 --vf=scale=1920:1080 误翻成“缩放”。
+    text = text:gsub("([\\h]+)scale([\\]N)", "%1缩放%2")
+    text = text:gsub("([\\h]+)shader([\\]N)", "%1着色%2")
+    text = text:gsub("([\\h]+)blit([\\]N)", "%1位块%2")
+    text = text:gsub("([\\h]+)PP([\\]N)", "%1后期%2")
+    text = text:gsub("([\\h]+)scale$", "%1缩放")
+    text = text:gsub("([\\h]+)shader$", "%1着色")
+    text = text:gsub("([\\h]+)blit$", "%1位块")
+    text = text:gsub("([\\h]+)PP$", "%1后期")
+
+    -- ⑥ 简化视图帧分组名：后接 \N（下一行 o.nl）或行尾
+    --    带边界是为了避开监控行 \N\h\h\h\h\hGPU: 37% 中的 "GPU:"
+    text = text:gsub("([\\h]+)[Vv][Oo]([\\]N)", "%1输出%2")
+    text = text:gsub("([\\h]+)[Dd]ecoder([\\]N)", "%1解码%2")
+    text = text:gsub("([\\h]+)[Gg][Pp][Uu]([\\]N)", "%1显卡%2")
+    text = text:gsub("([\\h]+)[Rr]enderer([\\]N)", "%1渲染%2")
+    text = text:gsub("([\\h]+)[Ff]resh([\\]N)", "%1新帧%2")
+    text = text:gsub("([\\h]+)[Rr]edraw([\\]N)", "%1重绘%2")
+    text = text:gsub("([\\h]+)[Vv][Oo]$", "%1输出")
+    text = text:gsub("([\\h]+)[Dd]ecoder$", "%1解码")
+    text = text:gsub("([\\h]+)[Gg][Pp][Uu]$", "%1显卡")
+    text = text:gsub("([\\h]+)[Rr]enderer$", "%1渲染")
+    text = text:gsub("([\\h]+)[Ff]resh$", "%1新帧")
+    text = text:gsub("([\\h]+)[Rr]edraw$", "%1重绘")
+
+    return text
+end
+
+-- 最终显示出口统一翻译（非侵入）
+-- 注：原版 o.persistent_overlay 默认 false，主显示走 mp.osd_message，
+-- 故 set_osd_ass 与 osd_message 两个出口都要包裹，覆盖全部显示路径。
+local original_set_osd_ass = mp.set_osd_ass
+mp.set_osd_ass = function(a, b, c)
+    return original_set_osd_ass(a, b, final_translate_ass(c))
+end
+local original_osd_message = mp.osd_message
+mp.osd_message = function(text, dur)
+    return original_osd_message(final_translate_ass(text), dur)
+end
+
+G_final_translate_ass = final_translate_ass
