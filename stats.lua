@@ -1,6 +1,6 @@
 -- ============================================================================
 -- mpv stats.lua 中文汉化（模块化 / 非侵入式）
--- 作者：yosh.wang    更新：20260928
+-- 作者：yosh.wang    更新：20260927
 --
 -- 🔗 项目仓库：https://github.com/yosh-wang/mpv-stats.lua-zh-chinese-translation-
 -- 🔗 MPV中文社区：https://github.com/yosh-wang/MPV-QQ-Discussion-Group
@@ -1942,6 +1942,7 @@ local function auto_translate_text(text)
         ["Video:"] = "视频：",
         ["Audio:"] = "音频：",
         ["Image:"] = "图像：",
+        ["Subtitle:"] = "字幕：",
         ["Frame:"] = "帧：",
         ["Picture Type:"] = "画面类型：",
         ["Interlaced"] = "隔行扫描",
@@ -2926,13 +2927,26 @@ local function update_gpu()
     end
 end
 
--- 刷新统计数据
+-- 刷新统计数据：CPU 每 2.5s、GPU 每 3.0s（仅默认信息页采集）
+-- 实测单次采集都要创建子进程（CPU 约 1.28s、GPU 约 1.4s），故周期须留足余量；
+-- 用 0.5s 轻量计时器 + 累加器实现两个独立周期（纯 Lua 运算，开销可忽略）。
+local refresh_tick = 0.5
+local refresh_cpu_acc, refresh_gpu_acc = 2.5, 3.0  -- 初值达阈值 = 首次立即采集
 local function refresh_stats()
-    update_counter = update_counter + 1
-    if update_counter % 3 == 0 then
+    -- 仅默认信息页展示这些数据，其他页面跳过，避免无谓的子进程开销
+    if curr_page ~= o.key_page_1 then
+        return
+    end
+    refresh_cpu_acc = refresh_cpu_acc + refresh_tick
+    refresh_gpu_acc = refresh_gpu_acc + refresh_tick
+    if refresh_cpu_acc >= 2.5 then
+        refresh_cpu_acc = 0
+        update_cpu()
+    end
+    if refresh_gpu_acc >= 3.0 then
+        refresh_gpu_acc = 0
         update_gpu()
     end
-    update_cpu()
 end
 
 -- 修改 add_file
@@ -2980,7 +2994,7 @@ process_key_binding = function(oneshot)
 
     if display_timer and display_timer:is_enabled() then
         if not stats_refresh_timer then
-            stats_refresh_timer = mp.add_periodic_timer(1.0, refresh_stats)
+            stats_refresh_timer = mp.add_periodic_timer(0.5, refresh_stats)
             mp.add_timeout(0.1, refresh_stats)
         end
     else
@@ -3014,6 +3028,21 @@ end)
 
 -- ============================================================
 -- 系统统计模块结束
+-- ============================================================
+
+
+-- ============================================================
+
+
+-- ============================================================
+
+
+-- ============================================================
+
+
+-- ============================================================
+
+
 -- ============================================================
 
 
